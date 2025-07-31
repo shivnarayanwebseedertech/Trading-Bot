@@ -54,7 +54,6 @@ function NotesSection({ symbol }) {
     setNotes(e.target.value);
     localStorage.setItem(key, e.target.value);
   }
-
   return (
     <textarea
       className="w-full h-40 rounded border px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"

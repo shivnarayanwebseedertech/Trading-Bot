@@ -47,7 +47,6 @@ export function calculateMACD(
     macdLine
       .slice(0, slowPeriod + signalPeriod - 1)
       .reduce((s, v) => s + (v || 0), 0) / signalPeriod;
-
   const signal = [];
   for (let i = 0; i < macdLine.length; i++) {
     if (i < slowPeriod + signalPeriod - 2) signal.push(null);

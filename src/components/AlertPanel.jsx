@@ -53,7 +53,6 @@ export default function AlertPanel({ symbol, chartData, indicatorsData }) {
     e.preventDefault();
     setError("");
     if (!inputValue || !user) return;
-
     if (!validateInputValue(inputValue)) {
       setError("Please enter a valid number.");
       return;
