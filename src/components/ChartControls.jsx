@@ -1,4 +1,3 @@
-// src/components/ChartControls.jsx
 import React, { useState } from "react";
 import IndicatorModal from "./IndicatorModal";
 
@@ -7,12 +6,11 @@ const timeframes = ["1m", "5m", "1h", "1d"];
 function ChartControls({
   selectedTf,
   setSelectedTf,
-  activeIndicators = [], // default to empty array to prevent errors
+  activeIndicators = [], // Expecting array of {key, label, ...}
   setActiveIndicators,
 }) {
   const [showIndicators, setShowIndicators] = useState(false);
 
-  // Complete list of available indicators (expand as you wish)
   const allIndicators = [
     { key: "sma", label: "Simple Moving Average" },
     { key: "ema", label: "Exponential Moving Average" },
@@ -21,7 +19,7 @@ function ChartControls({
     { key: "bbands", label: "Bollinger Bands" },
   ];
 
-  // Toggle indicator on/off
+  // Toggle indicator in the active list
   const toggleIndicator = (key) => {
     const exists = activeIndicators.find((ind) => ind.key === key);
     if (exists) {
@@ -32,7 +30,7 @@ function ChartControls({
     }
   };
 
-  // Remove indicator from active indicators
+  // Remove an indicator by key
   const removeIndicator = (key) => {
     setActiveIndicators(activeIndicators.filter((ind) => ind.key !== key));
   };
@@ -66,7 +64,7 @@ function ChartControls({
         </button>
       </div>
 
-      {/* Active indicator badges with remove button */}
+      {/* Active indicator badges with remove buttons */}
       {activeIndicators.length > 0 && (
         <div className="mb-4">
           {activeIndicators.map((i) => (

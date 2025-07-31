@@ -1,7 +1,6 @@
 import React from "react";
 import { useDrawing } from "../context/DrawingContext";
 
-// Updated Icon component with Rectangle support
 function Icon({ name, active }) {
   if (name === "trendline")
     return (
@@ -41,6 +40,83 @@ function Icon({ name, active }) {
         />
       </svg>
     );
+  if (name === "hline")
+    return (
+      <svg
+        viewBox="0 0 28 28"
+        width="22"
+        height="22"
+        className={active ? "text-blue-600" : "text-gray-400"}
+      >
+        <line
+          x1="6"
+          y1="14"
+          x2="22"
+          y2="14"
+          stroke="currentColor"
+          strokeWidth="3"
+        />
+      </svg>
+    );
+  if (name === "text")
+    return (
+      <svg
+        viewBox="0 0 28 28"
+        width="22"
+        height="22"
+        className={active ? "text-blue-600" : "text-gray-400"}
+      >
+        <text x="8" y="20" fontSize="14" fontWeight="bold" fill="currentColor">
+          T
+        </text>
+      </svg>
+    );
+  if (name === "arrow")
+    return (
+      <svg
+        viewBox="0 0 28 28"
+        width="22"
+        height="22"
+        className={active ? "text-blue-600" : "text-gray-400"}
+      >
+        <line
+          x1="7"
+          y1="21"
+          x2="21"
+          y2="7"
+          stroke="currentColor"
+          strokeWidth="3"
+        />
+        <polygon points="18,7 21,7 21,10" fill="currentColor" />
+      </svg>
+    );
+  if (name === "fib")
+    return (
+      <svg
+        viewBox="0 0 28 28"
+        width="22"
+        height="22"
+        className={active ? "text-blue-600" : "text-gray-400"}
+      >
+        <rect x="7" y="14" width="14" height="2" fill="currentColor" />
+        <rect
+          x="7"
+          y="18"
+          width="14"
+          height="2"
+          fill="currentColor"
+          opacity="0.5"
+        />
+        <rect
+          x="7"
+          y="22"
+          width="14"
+          height="2"
+          fill="currentColor"
+          opacity="0.25"
+        />
+      </svg>
+    );
   if (name === "select")
     return (
       <svg
@@ -72,11 +148,14 @@ function Icon({ name, active }) {
   return null;
 }
 
-// Toolbar tools with Rectangle option
 const tools = [
   { key: "select", tip: "Select" },
   { key: "trendline", tip: "Trend Line" },
   { key: "rectangle", tip: "Rectangle" },
+  { key: "hline", tip: "Horizontal Line" },
+  { key: "text", tip: "Text" },
+  { key: "arrow", tip: "Arrow" },
+  { key: "fib", tip: "Fibonacci Retracement" },
   { key: "erase", tip: "Erase All" },
 ];
 
