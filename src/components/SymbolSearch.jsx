@@ -19,14 +19,21 @@ function SymbolSearch({ onSelect, placeholder = "Search symbol..." }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Mock symbol search API (replace with your backend)
   useEffect(() => {
     if (!query) {
       setResults([]);
       return;
     }
-    // Simulate API call with delay
+
     const timer = setTimeout(() => {
+      // TODO: Replace this mock data fetch with real backend API call
+
+      // Example backend call: fetch(`/api/symbols?q=${encodeURIComponent(query)}`)
+      //   .then(res => res.json())
+      //   .then(data => setResults(data))
+      //   .catch(() => setResults([]));
+
+      // Below is the current mocked universe for demo/testing:
       const mockUniverse = [
         { symbol: "AAPL", name: "Apple Inc." },
         { symbol: "TSLA", name: "Tesla Inc." },
@@ -35,6 +42,7 @@ function SymbolSearch({ onSelect, placeholder = "Search symbol..." }) {
         { symbol: "ETHUSD", name: "Ethereum" },
         { symbol: "NIFTY", name: "Nifty 50" },
       ];
+
       const filtered = mockUniverse.filter(
         (s) =>
           s.symbol.toLowerCase().startsWith(query.toLowerCase()) ||
@@ -47,14 +55,14 @@ function SymbolSearch({ onSelect, placeholder = "Search symbol..." }) {
     return () => clearTimeout(timer);
   }, [query]);
 
-  function handleSelect(sym) {
-    onSelect(sym.symbol);
+  function handleSelect({ symbol }) {
+    onSelect(symbol);
     setQuery("");
     setShow(false);
   }
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div ref={containerRef} className="relative">
       <input
         type="text"
         value={query}
@@ -62,17 +70,24 @@ function SymbolSearch({ onSelect, placeholder = "Search symbol..." }) {
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => setShow(true)}
         className="w-full rounded border border-gray-300 dark:border-gray-600 px-3 py-2 text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        aria-label="Symbol search input"
+        autoComplete="off"
       />
       {show && results.length > 0 && (
-        <ul className="absolute left-0 right-0 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded shadow mt-1 max-h-60 overflow-auto z-20">
-          {results.map((s) => (
+        <ul
+          role="listbox"
+          className="absolute left-0 right-0 z-20 max-h-60 overflow-auto rounded border border-gray-300 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+        >
+          {results.map(({ symbol, name }) => (
             <li
-              key={s.symbol}
-              className="px-4 py-2 cursor-pointer hover:bg-blue-50 dark:hover:bg-gray-700 flex justify-between"
-              onClick={() => handleSelect(s)}
+              key={symbol}
+              role="option"
+              tabIndex={-1}
+              onClick={() => handleSelect({ symbol, name })}
+              className="flex cursor-pointer justify-between px-4 py-2 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-700"
             >
-              <span className="font-semibold">{s.symbol}</span>
-              <span className="text-gray-500 dark:text-gray-400">{s.name}</span>
+              <span className="font-semibold">{symbol}</span>
+              <span className="truncate">{name}</span>
             </li>
           ))}
         </ul>

@@ -1,9 +1,19 @@
 import React from "react";
 
 function WatchlistItem({ symbol, selected, onClick, onRemove }) {
+  function handleKeyDown(e) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick();
+    }
+  }
+
   return (
     <div
-      className={`flex items-center justify-between px-4 py-2 cursor-pointer border-b border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 ${
+      role="listitem"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      className={`flex items-center justify-between px-4 py-2 cursor-pointer border-b border-gray-200 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
         selected ? "bg-blue-100 dark:bg-blue-800 font-bold" : ""
       }`}
       onClick={onClick}
@@ -17,6 +27,7 @@ function WatchlistItem({ symbol, selected, onClick, onRemove }) {
         }}
         title="Remove"
         aria-label={`Remove ${symbol} from watchlist`}
+        type="button"
       >
         ✕
       </button>
@@ -24,4 +35,4 @@ function WatchlistItem({ symbol, selected, onClick, onRemove }) {
   );
 }
 
-export default WatchlistItem;
+export default React.memo(WatchlistItem);

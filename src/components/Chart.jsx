@@ -1,9 +1,14 @@
 import React, { useRef, useEffect, useState } from "react";
-import { createChart, CandlestickSeries, LineSeries } from "lightweight-charts";
+import { createChart } from "lightweight-charts";
+
 import { useDrawing } from "../context/DrawingContext";
 import { calculateSMA } from "../utils/sma";
+import { calculateEMA } from "../utils/ema";
+import { calculateRSI } from "../utils/rsi";
+import { calculateMACD } from "../utils/macd";
+import { calculateBollinger } from "../utils/bollingerBands";
+import DrawingOverlay from "./DrawingOverlay";
 
-// Helper: convert date string to UNIX timestamp (seconds)
 function toUnixTimestamp(dateStr) {
   return Math.floor(new Date(dateStr).getTime() / 1000);
 }
@@ -14,10 +19,11 @@ function Chart({ symbol, timeframe, activeIndicators = [] }) {
   const [chart, setChart] = useState(null);
   const [candleSeries, setCandleSeries] = useState(null);
   const [candleData, setCandleData] = useState([]);
-  const [smaSeries, setSmaSeries] = useState(null);
+
+  const indicatorSeriesRef = useRef({});
   const { activeTool, draft, setDraft, addDrawing, clearDraft } = useDrawing();
 
-  // 1. Fetch and Set Candle Data
+  // Load dummy candle data
   useEffect(() => {
     if (!symbol) return;
 
@@ -50,25 +56,30 @@ function Chart({ symbol, timeframe, activeIndicators = [] }) {
         low: 110,
         close: 118,
       },
-      // Add more data as needed
     ];
 
     setCandleData(data);
     if (candleSeries) candleSeries.setData(data);
-  }, [symbol, candleSeries]);
+  }, [symbol, timeframe, candleSeries]);
 
-  // 2. Chart and Series Initialization
+  // Create chart and candlestick series
   useEffect(() => {
     if (!chartDivRef.current) return;
 
     const chartInstance = createChart(chartDivRef.current, {
       width: chartDivRef.current.clientWidth,
       height: 500,
-      layout: { background: "#f5f6fa", textColor: "#333" },
-      grid: { vertLines: { color: "#eee" }, horzLines: { color: "#eee" } },
+      layout: {
+        backgroundColor: "#f5f6fa",
+        textColor: "#333",
+      },
+      grid: {
+        vertLines: { color: "#eee" },
+        horzLines: { color: "#eee" },
+      },
     });
 
-    const candleSeriesInstance = chartInstance.addSeries(CandlestickSeries, {
+    const candle = chartInstance.addCandlestickSeries({
       upColor: "#26a69a",
       downColor: "#ef5350",
       borderVisible: false,
@@ -77,12 +88,11 @@ function Chart({ symbol, timeframe, activeIndicators = [] }) {
     });
 
     setChart(chartInstance);
-    setCandleSeries(candleSeriesInstance);
+    setCandleSeries(candle);
 
-    // Responsive resizing
-    function handleResize() {
+    const handleResize = () => {
       chartInstance.applyOptions({ width: chartDivRef.current.clientWidth });
-    }
+    };
 
     window.addEventListener("resize", handleResize);
 
@@ -92,63 +102,131 @@ function Chart({ symbol, timeframe, activeIndicators = [] }) {
     };
   }, []);
 
-  // 3. SMA Overlay Management
+  // Add overlays (SMA, EMA, etc.)
   useEffect(() => {
-    if (!chart || !candleSeries) return;
+    if (!chart || !candleSeries || candleData.length === 0) return;
 
-    // Remove previous SMA overlay if it exists
-    if (smaSeries) {
-      chart.removeSeries(smaSeries);
-      setSmaSeries(null);
+    Object.values(indicatorSeriesRef.current).forEach((series) => {
+      try {
+        chart.removeSeries(series);
+      } catch {}
+    });
+    indicatorSeriesRef.current = {};
+
+    const addOverlay = (key, data, options) => {
+      const series = chart.addLineSeries(options);
+      series.setData(data);
+      indicatorSeriesRef.current[key] = series;
+    };
+
+    if (activeIndicators.some((i) => i.key === "sma")) {
+      const smaData = calculateSMA(candleData, 3);
+      addOverlay("sma", smaData, { color: "#1976d2", lineWidth: 2 });
     }
 
-    if (activeIndicators.includes("sma") && candleData.length > 0) {
-      const smaData = calculateSMA(candleData, 3); // Or use the period picker
-      const newSmaSeries = chart.addSeries(LineSeries, {
-        color: "blue",
+    if (activeIndicators.some((i) => i.key === "ema")) {
+      const emaData = calculateEMA(candleData, 9);
+      addOverlay("ema", emaData, {
+        color: "#ff9800",
         lineWidth: 2,
+        lineStyle: 1,
       });
-      newSmaSeries.setData(smaData);
-      setSmaSeries(newSmaSeries);
     }
-    // eslint-disable-next-line
+
+    if (activeIndicators.some((i) => i.key === "rsi")) {
+      const rsiData = calculateRSI(candleData, 14);
+      addOverlay("rsi", rsiData, {
+        color: "#f50057",
+        lineWidth: 1,
+        lineStyle: 2,
+      });
+    }
+
+    if (activeIndicators.some((i) => i.key === "macd")) {
+      const { macd, signal } = calculateMACD(candleData);
+      addOverlay("macd", macd, { color: "#009688", lineWidth: 1 });
+      addOverlay("macdSignal", signal, { color: "#9c27b0", lineWidth: 1 });
+    }
+
+    if (activeIndicators.some((i) => i.key === "bbands" || i.key === "bb")) {
+      const { upper, lower, middle } = calculateBollinger(candleData, 20, 2);
+      addOverlay("bbUpper", upper, {
+        color: "#43a047",
+        lineWidth: 1,
+        lineStyle: 1,
+      });
+      addOverlay("bbLower", lower, {
+        color: "#43a047",
+        lineWidth: 1,
+        lineStyle: 1,
+      });
+      addOverlay("bbMiddle", middle, {
+        color: "#607d8b",
+        lineWidth: 1,
+        lineStyle: 2,
+      });
+    }
+
+    return () => {
+      Object.values(indicatorSeriesRef.current).forEach((series) => {
+        try {
+          chart.removeSeries(series);
+        } catch {}
+      });
+      indicatorSeriesRef.current = {};
+    };
   }, [chart, candleSeries, candleData, activeIndicators]);
 
-  // 4. Mouse events for drawing tools: trendline & rectangle
-  function getRelativePos(e) {
+  // Drawing interaction
+  function getRelativePos(event) {
     const rect = containerRef.current.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
   }
 
-  function handleMouseDown(e) {
-    const { x, y } = getRelativePos(e);
-    if (activeTool === "trendline") {
-      setDraft({ type: "trendline", x1: x, y1: y, x2: x, y2: y });
-    }
-    if (activeTool === "rectangle") {
-      setDraft({ type: "rectangle", x1: x, y1: y, x2: x, y2: y });
+  function handleMouseDown(event) {
+    const { x, y } = getRelativePos(event);
+    switch (activeTool) {
+      case "trendline":
+        setDraft({ type: "trendline", x1: x, y1: y, x2: x, y2: y });
+        break;
+      case "rectangle":
+        setDraft({ type: "rectangle", x1: x, y1: y, x2: x, y2: y });
+        break;
+      case "arrow":
+        setDraft({ type: "arrow", x1: x, y1: y, x2: x, y2: y });
+        break;
+      case "fib":
+        setDraft({ type: "fib", x1: x, y1: y, x2: x, y2: y });
+        break;
+      case "hline":
+        addDrawing({ type: "hline", y });
+        setDraft(null);
+        break;
+      case "text":
+        const text = prompt("Enter text label:");
+        if (text) addDrawing({ type: "text", x, y, text });
+        setDraft(null);
+        break;
+      default:
+        break;
     }
   }
 
-  function handleMouseMove(e) {
+  function handleMouseMove(event) {
     if (!draft) return;
-    const { x, y } = getRelativePos(e);
-    if (activeTool === "trendline" && draft.type === "trendline") {
+    const { x, y } = getRelativePos(event);
+    if (draft.type === activeTool) {
       setDraft({ ...draft, x2: x, y2: y });
     }
-    if (activeTool === "rectangle" && draft.type === "rectangle") {
-      setDraft({ ...draft, x2: x, y2: y });
-    }
   }
 
-  function handleMouseUp(e) {
+  function handleMouseUp(event) {
     if (!draft) return;
-    const { x, y } = getRelativePos(e);
-    if (activeTool === "trendline" && draft.type === "trendline") {
-      addDrawing({ ...draft, x2: x, y2: y });
-      clearDraft();
-    }
-    if (activeTool === "rectangle" && draft.type === "rectangle") {
+    const { x, y } = getRelativePos(event);
+    if (draft.type === activeTool) {
       addDrawing({ ...draft, x2: x, y2: y });
       clearDraft();
     }
@@ -156,14 +234,15 @@ function Chart({ symbol, timeframe, activeIndicators = [] }) {
 
   return (
     <div
+      className="relative w-full h-[500px]"
       ref={containerRef}
-      className="relative w-full h-[500px] bg-white dark:bg-gray-800 rounded"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
+      style={{ userSelect: "none" }}
     >
       <div ref={chartDivRef} className="w-full h-full" />
-      {/* <DrawingOverlay /> should be rendered here or in the parent for SVG drawings */}
+      <DrawingOverlay />
     </div>
   );
 }

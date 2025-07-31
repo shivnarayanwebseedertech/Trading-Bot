@@ -3,6 +3,7 @@ import React, { useState } from "react";
 function IndicatorModal({ indicators, onToggle, onClose }) {
   const [search, setSearch] = useState("");
 
+  // Filter indicators based on search input (case-insensitive)
   const filteredIndicators = indicators.filter(
     (ind) =>
       ind.label.toLowerCase().includes(search.toLowerCase()) ||
@@ -15,13 +16,14 @@ function IndicatorModal({ indicators, onToggle, onClose }) {
       onClick={onClose}
       role="dialog"
       aria-modal="true"
+      aria-labelledby="indicator-modal-title"
     >
       <div
         className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full max-w-md max-h-[70vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()} // Prevent modal closing when clicking inside
       >
         <button
-          className="absolute top-3 right-4 text-gray-600 dark:text-gray-300 text-xl hover:text-blue-600"
+          className="absolute top-3 right-4 text-gray-600 dark:text-gray-300 text-xl"
           aria-label="Close indicators modal"
           onClick={onClose}
           type="button"
@@ -29,14 +31,19 @@ function IndicatorModal({ indicators, onToggle, onClose }) {
           &times;
         </button>
 
+        <h2 id="indicator-modal-title" className="sr-only">
+          Select Indicators
+        </h2>
+
         <input
-          type="text"
+          type="search"
           placeholder="Search indicators..."
           className="w-full mb-4 text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoFocus
           aria-label="Search indicators"
+          role="search"
         />
 
         {filteredIndicators.length === 0 ? (
@@ -55,7 +62,10 @@ function IndicatorModal({ indicators, onToggle, onClose }) {
                     ? "bg-blue-600 text-white"
                     : "bg-gray-200 dark:bg-gray-700 text-blue-700 hover:bg-blue-300 dark:hover:bg-blue-600"
                 }`}
-                onClick={() => onToggle(key)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onToggle(key);
+                }}
                 type="button"
                 aria-pressed={active}
                 aria-label={active ? `Remove ${label}` : `Add ${label}`}

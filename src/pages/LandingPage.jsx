@@ -71,12 +71,12 @@ function LandingPage() {
 
 function Feature({ icon, title, description }) {
   return (
-    <div className="bg-white p-6 rounded-xl shadow hover:shadow-md transition flex flex-col items-center">
-      <div className="text-4xl mb-3">{icon}</div>
+    <div className="bg-white p-6 rounded-xl shadow hover:shadow-md transition flex flex-col items-center text-center">
+      <div role="img" aria-label={`${title} icon`} className="text-4xl mb-3">
+        {icon}
+      </div>
       <div className="font-semibold text-lg mb-2">{title}</div>
       <div className="text-gray-600">{description}</div>
     </div>
   );
 }
-
-export default LandingPage;

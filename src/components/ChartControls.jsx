@@ -1,18 +1,19 @@
-// src/components/ChartControls.jsx
 import React, { useState } from "react";
 import IndicatorModal from "./IndicatorModal";
 
+// TODO: Replace below with backend-driven config if making dynamic in the future
 const timeframes = ["1m", "5m", "1h", "1d"];
 
 function ChartControls({
   selectedTf,
   setSelectedTf,
-  activeIndicators = [], // default to empty array to prevent errors
+  activeIndicators = [],
   setActiveIndicators,
+  // Optionally pass timeframes or indicator config from props/context in future
 }) {
   const [showIndicators, setShowIndicators] = useState(false);
 
-  // Complete list of available indicators (expand as you wish)
+  // TODO: Replace with backend API fetch or user-configured list in the future
   const allIndicators = [
     { key: "sma", label: "Simple Moving Average" },
     { key: "ema", label: "Exponential Moving Average" },
@@ -21,7 +22,6 @@ function ChartControls({
     { key: "bbands", label: "Bollinger Bands" },
   ];
 
-  // Toggle indicator on/off
   const toggleIndicator = (key) => {
     const exists = activeIndicators.find((ind) => ind.key === key);
     if (exists) {
@@ -29,12 +29,14 @@ function ChartControls({
     } else {
       const indicator = allIndicators.find((ind) => ind.key === key);
       if (indicator) setActiveIndicators([...activeIndicators, indicator]);
+      // TODO: Optionally send addIndicator API call here
     }
+    // TODO: Optionally sync indicator selection to backend/user profile here
   };
 
-  // Remove indicator from active indicators
   const removeIndicator = (key) => {
     setActiveIndicators(activeIndicators.filter((ind) => ind.key !== key));
+    // TODO: Optionally send removeIndicator API call here
   };
 
   return (
@@ -66,7 +68,7 @@ function ChartControls({
         </button>
       </div>
 
-      {/* Active indicator badges with remove button */}
+      {/* Active indicator badges with remove buttons */}
       {activeIndicators.length > 0 && (
         <div className="mb-4">
           {activeIndicators.map((i) => (
