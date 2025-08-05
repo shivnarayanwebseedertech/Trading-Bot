@@ -63,7 +63,7 @@ function LandingPage() {
       {/* Footer */}
       <footer className="border-t mt-12 py-4 text-center text-gray-500 bg-white">
         &copy; {new Date().getFullYear()} ChartPro. Not affiliated with
-        TradingView.
+        Trading-Bot.
       </footer>
     </div>
   );

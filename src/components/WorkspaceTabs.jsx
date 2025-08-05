@@ -7,16 +7,10 @@ export default function WorkspaceTabs({
   addTab,
   closeTab,
   renameTab,
-  exportWorkspace, // function to export workspace
-  importWorkspace, // function start import workflow
   setWorkspaces, // needed to pass to importWorkspace to update state
 }) {
   // Handle import button click and pass setWorkspaces/setActiveTabIdx to importWorkspace helper
-  const handleImportClick = () => {
-    if (typeof importWorkspace === "function") {
-      importWorkspace(setWorkspaces, setActiveTabIdx);
-    }
-  };
+ 
 
   const activeWorkspaceExists = workspaces && workspaces.length > 0 && workspaces[activeIdx];
 
@@ -67,29 +61,10 @@ export default function WorkspaceTabs({
       ))}
 
       {/* Export button */}
-      <button
-        className="ml-2 px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 font-semibold"
-        type="button"
-        aria-label="Export current workspace"
-        onClick={() => {
-          if (typeof exportWorkspace === "function" && activeWorkspaceExists) {
-            exportWorkspace(workspaces[activeIdx]);
-          }
-        }}
-        disabled={!activeWorkspaceExists}
-      >
-        Export
-      </button>
+     
 
       {/* Import button */}
-      <button
-        className="ml-2 px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-200 dark:hover:bg-gray-600 font-semibold"
-        type="button"
-        aria-label="Import workspace"
-        onClick={handleImportClick}
-      >
-        Import
-      </button>
+     
 
       {/* Add tab button */}
       <button

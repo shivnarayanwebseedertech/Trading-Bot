@@ -1,51 +1,67 @@
 import React, { useState, useEffect, useRef } from "react";
 
-// Default watchlist symbols; can be replaced or extended later via backend
-const DEFAULT_SYMBOLS = ["AAPL", "MSFT", "GOOGL", "TSLA", "AMZN"];
+// FMP API setup:
+const GAINERS_API =
+  "https://financialmodelingprep.com/api/v3/stock_market/gainers";
+const SEARCH_API = "https://financialmodelingprep.com/api/v3/search";
+const API_KEY = import.meta.env.VITE_COMPANY_API_KEY || "demo";
 
-// Fetch current price for the symbol from an API (dummy/demo URL here)
-// Replace with your own backend or real-time feed service when ready
-function fetchPrice(symbol) {
-  return fetch(
-    `https://financialmodelingprep.com/api/v3/quote-short/${encodeURIComponent(
-      symbol
-    )}?apikey=demo`
-  )
-    .then((res) => {
-      if (!res.ok) throw new Error("Failed to fetch price");
-      return res.json();
-    })
-    .then((data) =>
-      data && data[0]
-        ? { price: +data[0].price, symbol }
-        : { price: null, symbol }
-    )
-    .catch(() => ({ price: null, symbol }));
-}
-
+// -- Watchlist pulls top gainers by default! --
 export default function Sidebar({ selectedSymbol, setSelectedSymbol }) {
-  // Watchlist state persists in localStorage
-  const [symbols, setSymbols] = useState(() => {
-    try {
-      const saved = localStorage.getItem("watchlist");
-      return saved ? JSON.parse(saved) : DEFAULT_SYMBOLS;
-    } catch {
-      return DEFAULT_SYMBOLS;
-    }
-  });
-
-  // Store prices in a symbol->price dictionary
+  const [symbols, setSymbols] = useState([]);
+  const [names, setNames] = useState({}); // symbol -> full name
   const [prices, setPrices] = useState({});
-
-  // Controlled input for adding symbols
   const [input, setInput] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [searchActive, setSearchActive] = useState(false);
+  const searchTimer = useRef(null);
+  const dragIdx = useRef(null);
 
-  // Poll prices every 15 seconds (debounced, cleanup on change/unmount)
+  // ========== 1. At load, fetch top global gainers as default watchlist ==========
   useEffect(() => {
-    let ignore = false;
+    const ls = localStorage.getItem("watchlist");
+    if (ls) {
+      setSymbols(JSON.parse(ls));
+      return;
+    }
+    // Else, fetch FMP top gainers
+    fetch(`${GAINERS_API}?apikey=${API_KEY}`)
+      .then((res) => res.json())
+      .then((list) => {
+        if (!Array.isArray(list)) list = [];
+        setSymbols(list.map((row) => row.symbol));
+        setNames(
+          list.reduce((o, row) => {
+            o[row.symbol] = row.name;
+            return o;
+          }, {})
+        );
+        // Pick first as selected if not set (needs parent prop default!)
+        if (list.length && !selectedSymbol) setSelectedSymbol(list[0].symbol);
+      })
+      .catch(() => setSymbols(["AAPL"]));
+    // eslint-disable-next-line
+  }, []);
+  // Save to localStorage when changes
+  useEffect(() => {
+    localStorage.setItem("watchlist", JSON.stringify(symbols));
+  }, [symbols]);
 
+  // ========== 2. Price fetching ==========
+  useEffect(() => {
+    // Could switch to your chart API for uniformity if needed
+    let ignore = false;
     async function refreshPrices() {
-      const promises = symbols.map((sym) => fetchPrice(sym));
+      const promises = symbols.map((sym) =>
+        fetch(
+          `https://api.twelvedata.com/price?symbol=${encodeURIComponent(
+            sym.replace("/", "")
+          )}&apikey=demo`
+        )
+          .then((r) => r.json())
+          .then((d) => ({ price: +d.price || null, symbol: sym }))
+          .catch(() => ({ price: null, symbol: sym }))
+      );
       const results = await Promise.all(promises);
       if (!ignore) {
         setPrices((prev) =>
@@ -59,24 +75,46 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol }) {
         );
       }
     }
-
     refreshPrices();
     const interval = setInterval(refreshPrices, 15000);
-
     return () => {
       ignore = true;
       clearInterval(interval);
     };
   }, [symbols]);
 
-  // Save watchlist symbols in localStorage whenever it changes
+  // ========== 3. Search/autocomplete with FMP ==========
   useEffect(() => {
-    localStorage.setItem("watchlist", JSON.stringify(symbols));
-  }, [symbols]);
+    if (!input.trim()) return setSuggestions([]);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      fetch(
+        `${SEARCH_API}?query=${encodeURIComponent(
+          input.trim()
+        )}&limit=8&apikey=${API_KEY}`
+      )
+        .then((res) => res.json())
+        .then((data) => setSuggestions(data || []))
+        .catch(() => setSuggestions([]));
+    }, 300);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [input]);
 
-  // Drag-and-drop helper state
-  const dragIdx = useRef(null);
-
+  // ========== 4. Add, remove, drag ==========
+  function addSymbol(sym, name) {
+    if (!symbols.includes(sym)) setSymbols([...symbols, sym]);
+    if (name) setNames((n) => ({ ...n, [sym]: name }));
+    setSelectedSymbol(sym);
+    setInput("");
+    setSuggestions([]);
+    setSearchActive(false);
+  }
+  function removeSymbol(sym) {
+    setSymbols(symbols.filter((s) => s !== sym));
+    if (sym === selectedSymbol) setSelectedSymbol(symbols[0] || "");
+  }
   function handleDragStart(i) {
     dragIdx.current = i;
   }
@@ -89,63 +127,54 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol }) {
     dragIdx.current = null;
   }
 
-  // Validate symbol format (simple: uppercase letters, numbers; improve for your needs)
-  function isValidSymbol(sym) {
-    return /^[A-Z0-9.]{1,8}$/.test(sym);
-  }
-
-  // Add new symbol to watchlist if valid and not existing
-  function addSymbol() {
-    const sym = input.trim().toUpperCase();
-    if (!sym) return;
-    if (!isValidSymbol(sym)) {
-      alert("Invalid symbol format. Please enter a valid stock symbol.");
-      return;
-    }
-    if (!symbols.includes(sym)) {
-      setSymbols([...symbols, sym]);
-      setInput("");
-      setSelectedSymbol(sym); // Optionally switch to new symbol automatically
-    } else {
-      alert("Symbol already in watchlist.");
-    }
-  }
-
-  // Remove symbol from watchlist
-  function removeSymbol(sym) {
-    setSymbols(symbols.filter((s) => s !== sym));
-    // If removed symbol was selected, reset selection to first or empty
-    if (sym === selectedSymbol) {
-      setSelectedSymbol(symbols.length > 1 ? symbols[0] : "");
-    }
-  }
-
+  // ========== 5. UI ==========
   return (
-    <aside className="w-56 min-w-40 bg-white dark:bg-gray-900 border-r dark:border-gray-700 p-4 flex flex-col">
-      <div className="flex mb-2">
+    <aside className="w-56 min-w-40 bg-[#121826] dark:bg-gray-900 border-r dark:border-gray-700 p-4 flex flex-col">
+      {/* Search box */}
+      <div className="flex mb-2 relative">
         <input
           className="flex-1 rounded px-2 py-1 border text-sm"
-          placeholder="Add symbol"
+          placeholder="Add symbol/company"
           value={input}
-          onChange={(e) => setInput(e.target.value.toUpperCase())}
-          onKeyDown={(e) => e.key === "Enter" && addSymbol()}
-          aria-label="Add stock symbol"
+          onFocus={() => setSearchActive(true)}
+          onBlur={() => setTimeout(() => setSearchActive(false), 150)}
+          onChange={(e) => {
+            setInput(e.target.value.toUpperCase());
+            setSearchActive(true);
+          }}
+          aria-label="Search global stocks"
         />
         <button
-          onClick={addSymbol}
-          className="ml-2 px-2 py-1 bg-blue-600 text-white rounded focus:outline-none"
-          aria-label="Add symbol to watchlist"
+          onClick={() =>
+            suggestions[0]?.symbol &&
+            addSymbol(suggestions[0].symbol, suggestions[0].name)
+          }
+          className="ml-2 px-2 py-1 bg-blue-600 text-white rounded"
           type="button"
+          disabled={!input.trim()}
         >
           +
         </button>
+        {/* Suggestions */}
+        {searchActive && suggestions.length > 0 && (
+          <div className="absolute z-20 left-0 top-8 w-full bg-white border border-gray-200 rounded shadow-xl">
+            {suggestions.map((s) => (
+              <div
+                key={s.symbol}
+                className="px-2 py-1 cursor-pointer hover:bg-blue-100 text-xs"
+                title={s.name}
+                onMouseDown={() => addSymbol(s.symbol, s.name)}
+              >
+                <b>{s.symbol}</b>{" "}
+                <span className="text-gray-600">{s.name}</span>{" "}
+                <span className="text-gray-400">({s.exchangeShortName})</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-
-      <ul
-        className="flex-1 overflow-auto space-y-1"
-        style={{ minHeight: 0 }}
-        aria-label="Watchlist"
-      >
+      {/* Watchlist (always starts with top gainers) */}
+      <ul className="flex-1 overflow-auto space-y-1" aria-label="Watchlist">
         {symbols.map((sym, i) => {
           const price = prices[sym];
           const isActive = sym === selectedSymbol;
@@ -157,7 +186,7 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol }) {
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleDrop(i)}
               onClick={() => setSelectedSymbol(sym)}
-              className={`rounded flex items-center px-2 py-1 cursor-pointer select-none transition ${
+              className={`rounded flex items-center px-2 py-1 cursor-pointer transition ${
                 isActive
                   ? "bg-blue-50 dark:bg-blue-900 border-l-4 border-blue-600 font-bold"
                   : "hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -166,27 +195,26 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol }) {
               aria-selected={isActive}
               tabIndex={0}
               onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  setSelectedSymbol(sym);
-                }
+                if (e.key === "Enter" || e.key === " ") setSelectedSymbol(sym);
               }}
             >
               <span className="flex-1 truncate">{sym}</span>
+              <span className="ml-2 text-xs text-gray-400 truncate">
+                {names[sym] || ""}
+              </span>
               <span
                 className={`ml-2 text-sm tabular-nums ${
-                  price === null ? "text-gray-400" : "text-green-600"
+                  price == null ? "text-gray-400" : "text-green-600"
                 }`}
-                aria-label={`Price for ${sym}`}
               >
-                {price === null ? "..." : `$${price.toFixed(2)}`}
+                {price == null ? "..." : `$${price.toFixed(4)}`}
               </span>
               <button
-                className="ml-2 text-gray-400 hover:text-red-500 text-xs focus:outline-none"
+                className="ml-2 text-gray-400 hover:text-red-500 text-xs"
                 onClick={(e) => {
                   e.stopPropagation();
                   removeSymbol(sym);
                 }}
-                aria-label={`Remove ${sym} from watchlist`}
                 tabIndex={-1}
                 type="button"
               >
