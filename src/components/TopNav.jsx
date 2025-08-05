@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import SymbolSearch from "./SymbolSearch";
-import AuthModal from "./AuthModal";
-import AccountPanel from "./AccountPanel"; // Import the profile/settings modal
-import { useAuth } from "../context/AuthContext";
+// import AuthModal from "./AuthModal"; // Commented out - authentication modal
+// import AccountPanel from "./AccountPanel"; // Commented out - profile/settings modal
+// import { useAuth } from "../context/AuthContext"; // Commented out - authentication context
 
 function TopNav({ onSymbolSelect, location, children }) {
-  const { user, logout } = useAuth();
-  const [showAuth, setShowAuth] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  // const { user, logout } = useAuth(); // Commented out - authentication hooks
+  // const [showAuth, setShowAuth] = useState(false); // Commented out - auth modal state
+  // const [showProfile, setShowProfile] = useState(false); // Commented out - profile modal state
 
   return (
     <div className="h-14 flex items-center bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 font-semibold sticky top-0 z-10 shadow-sm">
@@ -30,6 +30,8 @@ function TopNav({ onSymbolSelect, location, children }) {
       <div className="ml-auto flex items-center gap-6">
         {children}
 
+        {/* COMMENTED OUT - Authentication functionality */}
+        {/* 
         {user ? (
           <>
             <button
@@ -50,6 +52,7 @@ function TopNav({ onSymbolSelect, location, children }) {
             </button>
 
             {/* Profile Modal */}
+            {/*
             <AccountPanel
               open={showProfile}
               onClose={() => setShowProfile(false)}
@@ -65,10 +68,11 @@ function TopNav({ onSymbolSelect, location, children }) {
             Login / Sign Up
           </button>
         )}
+        */}
       </div>
 
-      {/* Authentication Modal */}
-      <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+      {/* COMMENTED OUT - Authentication Modal */}
+      {/* <AuthModal open={showAuth} onClose={() => setShowAuth(false)} /> */}
     </div>
   );
 }

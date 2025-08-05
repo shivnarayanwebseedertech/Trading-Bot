@@ -56,6 +56,7 @@ function App() {
   });
 
   useEffect(() => {
+    console.log("Dark mode changed to:", darkMode);
     if (darkMode) {
       document.documentElement.classList.add("dark");
     } else {
@@ -187,7 +188,7 @@ function App() {
         <TopNav location="India">
           <ThemeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
         </TopNav>
-
+    
         {/* Workspace Tabs with export/import handlers */}
         <WorkspaceTabs
           workspaces={workspaces}
@@ -208,6 +209,7 @@ function App() {
             setSelectedSymbol={(symbol) =>
               updateWorkspaceField("symbol", symbol)
             }
+            darkMode={darkMode}
           />
 
           {/* Main content */}

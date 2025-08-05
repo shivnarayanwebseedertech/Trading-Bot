@@ -34,9 +34,11 @@ const INTERVALS = {
   "5y": "5year",
 };
 // TwelveData API key from .env
-const API_KEY = import.meta.env.VITE_MARKET_API_KEY || "demo";
+const API_KEY = "demo"; // Using demo key directly since we don't have a real API key
 
 function Chart({ symbol, timeframe, activeIndicators = [] }) {
+  // Get dark mode from document class
+  const isDarkMode = document.documentElement.classList.contains('dark');
   const chartDivRef = useRef(null);
   const containerRef = useRef(null);
   const [chart, setChart] = useState(null);
@@ -45,12 +47,60 @@ function Chart({ symbol, timeframe, activeIndicators = [] }) {
   const indicatorSeriesRef = useRef({});
   const { activeTool, draft, setDraft, addDrawing, clearDraft } = useDrawing();
 
+  // Function to generate mock candle data
+  const generateMockCandleData = (symbol, count) => {
+    console.log("Generating mock data for", symbol);
+    const basePrice = symbol === "AAPL" ? 190 : 
+                     symbol === "MSFT" ? 420 : 
+                     symbol === "GOOGL" ? 175 : 
+                     symbol === "AMZN" ? 180 : 100;
+    
+    const now = new Date();
+    const data = [];
+    
+    for (let i = count; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      
+      const volatility = 0.03; // 3% price movement
+      const changePercent = (Math.random() - 0.5) * volatility;
+      const open = basePrice * (1 + (Math.random() - 0.5) * 0.01 * i);
+      const close = open * (1 + changePercent);
+      const high = Math.max(open, close) * (1 + Math.random() * 0.01);
+      const low = Math.min(open, close) * (1 - Math.random() * 0.01);
+      
+      data.push({
+        time: Math.floor(date.getTime() / 1000),
+        open,
+        high,
+        low,
+        close
+      });
+    }
+    
+    return data;
+  };
+  
   // ========= 1. Fetch candle data from Twelve Data API =========
   useEffect(() => {
-    if (!symbol || !INTERVALS[timeframe]) return;
+    if (!symbol || !INTERVALS[timeframe]) {
+      console.log("Missing symbol or timeframe:", { symbol, timeframe });
+      return;
+    }
+    console.log("Fetching data for symbol:", symbol, "timeframe:", timeframe);
     setCandleData([]);
     // For forex and crypto, TwelveData expects EUR/USD as EURUSD
     const apiSym = symbol.replace("/", "");
+    
+    // Generate mock data if using demo key
+    if (API_KEY === "demo") {
+      console.log("Using mock data for demo key");
+      const mockData = generateMockCandleData(symbol, 100);
+      setCandleData(mockData);
+      if (candleSeries) candleSeries.setData(mockData);
+      return;
+    }
+    
     axios
       .get(`https://api.twelvedata.com/time_series`, {
         params: {
@@ -79,11 +129,22 @@ function Chart({ symbol, timeframe, activeIndicators = [] }) {
   // ========= 2. Chart and candle series initialization =========
   useEffect(() => {
     if (!chartDivRef.current) return;
+    console.log("Initializing chart with symbol:", symbol, "Dark mode:", isDarkMode);
     const chartInstance = createChart(chartDivRef.current, {
       width: chartDivRef.current.clientWidth,
       height: 500,
-      layout: { background: "#f5f6fa", textColor: "#333" },
-      grid: { vertLines: { color: "#eee" }, horzLines: { color: "#eee" } },
+      layout: { 
+        background: isDarkMode ? "#1e1e2d" : "#f5f6fa", 
+        textColor: isDarkMode ? "#d1d4dc" : "#333" 
+      },
+      grid: { 
+        vertLines: { color: isDarkMode ? "#2e2e3e" : "#eee" }, 
+        horzLines: { color: isDarkMode ? "#2e2e3e" : "#eee" } 
+      },
+      timeScale: {
+        borderColor: isDarkMode ? "#2e2e3e" : "#eee",
+        timeVisible: true,
+      },
     });
     const candle = chartInstance.addCandlestickSeries({
       upColor: "#26a69a",
@@ -105,6 +166,28 @@ function Chart({ symbol, timeframe, activeIndicators = [] }) {
       chartInstance.remove();
     };
   }, []);
+  
+  // ========= 2.1 Handle dark mode changes =========
+  useEffect(() => {
+    if (!chart) return;
+    
+    // Update chart theme when dark mode changes
+    chart.applyOptions({
+      layout: { 
+        background: isDarkMode ? "#1e1e2d" : "#f5f6fa", 
+        textColor: isDarkMode ? "#d1d4dc" : "#333" 
+      },
+      grid: { 
+        vertLines: { color: isDarkMode ? "#2e2e3e" : "#eee" }, 
+        horzLines: { color: isDarkMode ? "#2e2e3e" : "#eee" } 
+      },
+      timeScale: {
+        borderColor: isDarkMode ? "#2e2e3e" : "#eee",
+      },
+    });
+    
+    console.log("Updated chart theme for dark mode:", isDarkMode);
+  }, [chart, isDarkMode]);
 
   // ========= 3. Add overlays (SMA, EMA, RSI, etc...) =========
   useEffect(() => {

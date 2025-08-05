@@ -1,66 +1,40 @@
-import React, { useState, useEffect } from "react";
-import NewsFeed from "./NewsFeed";
+import React from "react";
+import PortfolioPanel from "./PortfolioPanel";
 
 export default function BottomPanel({ symbol }) {
-  const [tab, setTab] = useState("news");
-
   return (
     <div className="bg-white dark:bg-gray-800 border-t mt-4 rounded-b-xl">
-      <div className="flex p-2 border-b">
-        <button
-          className={tab === "news" ? "font-bold text-blue-600 mr-4" : "mr-4"}
-          onClick={() => setTab("news")}
-        >
-          News
-        </button>
-        <button
-          className={
-            tab === "calendar" ? "font-bold text-blue-600 mr-4" : "mr-4"
-          }
-          onClick={() => setTab("calendar")}
-        >
-          Calendar
-        </button>
-        <button
-          className={tab === "notes" ? "font-bold text-blue-600" : ""}
-          onClick={() => setTab("notes")}
-        >
-          Notes
-        </button>
-      </div>
-      <div className="p-3 h-52 overflow-y-auto">
-        {tab === "news" && <NewsFeed symbol={symbol} />}
-        {tab === "calendar" && (
-          <div className="text-gray-500 dark:text-gray-400">
-            Calendar integration coming soon!
+      <div className="grid grid-cols-2 gap-4 p-3 h-52">
+        <div className="overflow-y-auto">
+          <h3 className="font-bold mb-2">Orders</h3>
+          <div className="overflow-auto max-h-44 border rounded bg-white dark:bg-gray-900 p-2">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-gray-300 dark:border-gray-700">
+                  <th className="px-3 py-2">Symbol</th>
+                  <th className="px-3 py-2">Type</th>
+                  <th className="px-3 py-2">Quantity</th>
+                  <th className="px-3 py-2">Price</th>
+                  <th className="px-3 py-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <td className="px-3 py-1 font-mono">{symbol}</td>
+                  <td className="px-3 py-1">BUY</td>
+                  <td className="px-3 py-1">10</td>
+                  <td className="px-3 py-1">$195.40</td>
+                  <td className="px-3 py-1 text-yellow-500">PENDING</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-        )}
-        {tab === "notes" && <NotesSection symbol={symbol} />}
+        </div>
+        <div className="overflow-y-auto">
+          <h3 className="font-bold mb-2">Portfolio</h3>
+          <PortfolioPanel />
+        </div>
       </div>
     </div>
-  );
-}
-
-// Simple persistent notes per symbol saved in localStorage
-function NotesSection({ symbol }) {
-  const key = "notes_" + symbol;
-  const [notes, setNotes] = useState(() => localStorage.getItem(key) || "");
-
-  useEffect(() => {
-    setNotes(localStorage.getItem(key) || "");
-  }, [symbol]);
-
-  function handleChange(e) {
-    setNotes(e.target.value);
-    localStorage.setItem(key, e.target.value);
-  }
-  return (
-    <textarea
-      className="w-full h-40 rounded border px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-      value={notes}
-      onChange={handleChange}
-      placeholder={`Your notes for ${symbol}...`}
-      aria-label={`Notes for ${symbol}`}
-    />
   );
 }

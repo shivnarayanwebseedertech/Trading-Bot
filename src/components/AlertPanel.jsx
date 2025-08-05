@@ -24,6 +24,8 @@ export default function AlertPanel({ symbol, chartData, indicatorsData }) {
   const [alertType, setAlertType] = useState("price");
   const [repeat, setRepeat] = useState(false);
   const [error, setError] = useState("");
+  // This component handles price and indicator alerts for the active symbol
+  // Users can set alerts that trigger notifications when conditions are met
 
   // Default snooze time: 10 minutes
   const defaultSnoozeMs = 10 * 60 * 1000;
@@ -177,6 +179,7 @@ export default function AlertPanel({ symbol, chartData, indicatorsData }) {
 
   return (
     <div className="p-3 border rounded bg-blue-50 dark:bg-gray-900 mb-6 max-w-xl">
+      {/* Alert input form - commented out as per request
       <form className="mb-3 flex items-center gap-2" onSubmit={addAlert}>
         <select
           value={alertType}
@@ -218,6 +221,7 @@ export default function AlertPanel({ symbol, chartData, indicatorsData }) {
           Add Alert
         </button>
       </form>
+      */}
       {error && (
         <div className="mb-2 px-2 py-1 text-sm text-red-700 bg-red-100 rounded">
           {error}
