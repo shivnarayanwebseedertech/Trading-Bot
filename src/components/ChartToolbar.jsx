@@ -165,7 +165,7 @@ export default function ChartToolbar() {
   return (
     <div
       className="
-        absolute left-3 top-12 z-30 flex flex-col gap-2
+        absolute left-0 top-10 z-30 flex flex-col gap-2
         bg-white/95 dark:bg-gray-700/95 shadow-lg border border-gray-200 dark:border-gray-600
         rounded-2xl py-4 px-2
       "

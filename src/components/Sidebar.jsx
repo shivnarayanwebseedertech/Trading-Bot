@@ -1,119 +1,323 @@
 import React, { useState, useEffect, useRef } from "react";
 
-// FMP API setup:
-const GAINERS_API =
-  "https://financialmodelingprep.com/api/v3/stock_market/gainers";
-const SEARCH_API = "https://financialmodelingprep.com/api/v3/search";
-const API_KEY = "demo"; // Using demo key directly
-
-// -- Watchlist with mock stock data --
 export default function Sidebar({ selectedSymbol, setSelectedSymbol, darkMode }) {
-  // Mock stock data for the sidebar
-  const mockStocks = [
-    { symbol: "AAPL", name: "Apple Inc.", price: 195.42 },
-    { symbol: "MSFT", name: "Microsoft Corporation", price: 420.55 },
-    { symbol: "GOOGL", name: "Alphabet Inc.", price: 175.98 },
-    { symbol: "AMZN", name: "Amazon.com Inc.", price: 183.32 },
-    { symbol: "META", name: "Meta Platforms Inc.", price: 472.01 },
-    { symbol: "TSLA", name: "Tesla Inc.", price: 177.89 },
-    { symbol: "NVDA", name: "NVIDIA Corporation", price: 950.02 },
-    { symbol: "JPM", name: "JPMorgan Chase & Co.", price: 198.75 },
-    { symbol: "V", name: "Visa Inc.", price: 275.63 },
-    { symbol: "WMT", name: "Walmart Inc.", price: 59.98 },
-    { symbol: "JNJ", name: "Johnson & Johnson", price: 147.55 },
-    { symbol: "PG", name: "Procter & Gamble Co.", price: 162.30 },
-    { symbol: "MA", name: "Mastercard Inc.", price: 458.12 },
-    { symbol: "UNH", name: "UnitedHealth Group Inc.", price: 527.89 },
-    { symbol: "HD", name: "Home Depot Inc.", price: 345.67 }
-  ];
+  // Use a state variable for the backend URL, loading it from localStorage initially
+  const [backendBaseUrl, setBackendBaseUrl] = useState(
+    () => localStorage.getItem('backendBaseUrl') || 'https://55b970bc0738.ngrok-free.app/'
+  );
+  
+  // Remove trailing slash if present to avoid double slashes
+  const cleanBaseUrl = backendBaseUrl.replace(/\/$/, '');
+  const FOREX_API = `${cleanBaseUrl}/symbols/forex`;
 
-  const [symbols, setSymbols] = useState(mockStocks.map(stock => stock.symbol));
-  const [names, setNames] = useState(mockStocks.reduce((acc, stock) => {
-    acc[stock.symbol] = stock.name;
-    return acc;
-  }, {}));
-  const [prices, setPrices] = useState(mockStocks.reduce((acc, stock) => {
-    acc[stock.symbol] = stock.price;
-    return acc;
-  }, {}));
+  const [symbols, setSymbols] = useState([]);
+  const [names, setNames] = useState({});
+  const [prices, setPrices] = useState({});
+  const [allForexSymbols, setAllForexSymbols] = useState([]);
   const [input, setInput] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [searchActive, setSearchActive] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const searchTimer = useRef(null);
   const dragIdx = useRef(null);
 
-  // Set the first stock as selected if none is selected
+  // Consolidated data fetching and loading logic
   useEffect(() => {
-    if (!selectedSymbol && symbols.length > 0) {
-      setSelectedSymbol(symbols[0]);
+    // If the URL is not set, we can't fetch anything.
+    if (!backendBaseUrl) {
+      setLoading(false);
+      return;
     }
-  }, [symbols, selectedSymbol, setSelectedSymbol]);
 
-  // Save to localStorage when changes
+    const loadInitialData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      console.log('Starting data fetch from:', FOREX_API);
+
+      // Load saved watchlist first
+      const saved = localStorage.getItem("forexWatchlist");
+      if (saved) {
+        try {
+          const savedSymbols = JSON.parse(saved);
+          if (Array.isArray(savedSymbols) && savedSymbols.length > 0) {
+            console.log('Loaded saved symbols:', savedSymbols);
+            setSymbols(savedSymbols);
+            if (!selectedSymbol) {
+              setSelectedSymbol(savedSymbols[0]);
+            }
+          }
+        } catch (err) {
+          console.error('Error loading saved watchlist:', err);
+        }
+      }
+
+      try {
+        console.log('Fetching from API:', FOREX_API);
+        
+        const response = await fetch(FOREX_API, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            // Remove ngrok-specific headers for Render
+          },
+          mode: 'cors'
+        });
+
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const text = await response.text();
+        console.log('Raw response text:', text);
+
+        if (!text) {
+          throw new Error('Empty response from server');
+        }
+
+        let data;
+        try {
+          data = JSON.parse(text);
+          console.log('Parsed JSON data:', data);
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError);
+          throw new Error(`Invalid JSON response: ${parseError.message}`);
+        }
+
+        const forexData = Array.isArray(data) ? data : data.symbols || [];
+        console.log('Processed forex data:', forexData);
+        
+        if (forexData.length === 0) {
+          throw new Error('No forex symbols returned from API');
+        }
+        
+        setAllForexSymbols(forexData);
+        
+        const symbolList = forexData.map(item =>
+          typeof item === 'string' ? item : item.symbol || item.name
+        );
+        
+        const nameMap = {};
+        const priceMap = {};
+        
+        forexData.forEach(item => {
+          const symbol = typeof item === 'string' ? item : item.symbol || item.name;
+          nameMap[symbol] = typeof item === 'object' ? (item.name || item.description || symbol) : symbol;
+          priceMap[symbol] = typeof item === 'object' ? (item.price || Math.random() * 100 + 1) : Math.random() * 100 + 1;
+        });
+        
+        console.log('Symbol list:', symbolList);
+        console.log('Name map:', nameMap);
+        console.log('Price map:', priceMap);
+        
+        setSymbols(symbolList);
+        setNames(nameMap);
+        setPrices(priceMap);
+        
+        if (!selectedSymbol && symbolList.length > 0) {
+          setSelectedSymbol(symbolList[0]);
+        }
+        
+        console.log('Data loading completed successfully');
+        
+      } catch (err) {
+        console.error('Error fetching forex symbols:', err);
+        setError(`${err.message}`);
+        
+        // Only use fallback if no symbols are already loaded
+        if (symbols.length === 0) {
+          console.log('Using fallback data');
+          const fallbackSymbols = ['EURUSD', 'GBPUSD', 'USDJPY', 'AUDUSD', 'USDCAD'];
+          const fallbackNames = {
+            'EURUSD': 'Euro/US Dollar',
+            'GBPUSD': 'British Pound/US Dollar',
+            'USDJPY': 'US Dollar/Japanese Yen',
+            'AUDUSD': 'Australian Dollar/US Dollar',
+            'USDCAD': 'US Dollar/Canadian Dollar'
+          };
+          const fallbackPrices = {
+            'EURUSD': 1.0875,
+            'GBPUSD': 1.2654,
+            'USDJPY': 149.32,
+            'AUDUSD': 0.6598,
+            'USDCAD': 1.3642
+          };
+          
+          setSymbols(fallbackSymbols);
+          setNames(fallbackNames);
+          setPrices(fallbackPrices);
+          setAllForexSymbols(fallbackSymbols.map(symbol => ({ symbol, name: fallbackNames[symbol] })));
+          
+          if (!selectedSymbol) {
+            setSelectedSymbol(fallbackSymbols[0]);
+          }
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInitialData();
+  }, [backendBaseUrl]); // Removed selectedSymbol dependency to prevent infinite loops
+
+  // Save watchlist to localStorage when it changes
   useEffect(() => {
-    localStorage.setItem("watchlist", JSON.stringify(symbols));
+    if (symbols.length > 0) {
+      localStorage.setItem("forexWatchlist", JSON.stringify(symbols));
+    }
   }, [symbols]);
 
-  // ========== 2. Mock price updates ==========
+  // Simulate price updates
   useEffect(() => {
-    // Simulate price updates with small random changes
+    if (symbols.length === 0) return;
+    
     const interval = setInterval(() => {
       setPrices(prevPrices => {
         const newPrices = { ...prevPrices };
         symbols.forEach(symbol => {
           if (newPrices[symbol]) {
-            // Add a small random change (-0.5% to +0.5%)
-            const change = (Math.random() - 0.5) * 0.01;
-            newPrices[symbol] = +(newPrices[symbol] * (1 + change)).toFixed(2);
+            const change = (Math.random() - 0.5) * 0.002;
+            newPrices[symbol] = +(newPrices[symbol] * (1 + change)).toFixed(5);
           }
         });
         return newPrices;
       });
-    }, 5000); // Update every 5 seconds
+    }, 3000);
     
     return () => clearInterval(interval);
   }, [symbols]);
 
-  // ========== 3. Search/autocomplete with mock data ==========
+  // Search/autocomplete functionality
   useEffect(() => {
-    if (!input.trim()) return setSuggestions([]);
+    if (!input.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    
     if (searchTimer.current) clearTimeout(searchTimer.current);
     
     searchTimer.current = setTimeout(() => {
-      // Filter mock stocks based on input
-      const filteredStocks = mockStocks.filter(stock => 
-        stock.symbol.toLowerCase().includes(input.toLowerCase()) || 
-        stock.name.toLowerCase().includes(input.toLowerCase())
-      ).slice(0, 8); // Limit to 8 results
+      const filteredSymbols = allForexSymbols.filter(item => {
+        const symbol = typeof item === 'string' ? item : item.symbol || item.name;
+        const name = typeof item === 'object' ? (item.name || item.description || '') : '';
+        
+        return symbol.toLowerCase().includes(input.toLowerCase()) || 
+               name.toLowerCase().includes(input.toLowerCase());
+      }).slice(0, 8);
       
-      setSuggestions(filteredStocks.map(stock => ({
-        symbol: stock.symbol,
-        name: stock.name,
-        type: 'Common Stock'
+      setSuggestions(filteredSymbols.map(item => ({
+        symbol: typeof item === 'string' ? item : item.symbol || item.name,
+        name: typeof item === 'object' ? (item.name || item.description || '') : '',
+        type: 'Forex Pair'
       })));
     }, 300);
     
     return () => {
       if (searchTimer.current) clearTimeout(searchTimer.current);
     };
-  }, [input]);
+  }, [input, allForexSymbols]);
 
-  // ========== 4. Add, remove, drag ==========
+  // Enhanced test API function
+  const testAPI = async () => {
+    try {
+      console.log('=== Testing API Connection ===');
+      console.log('URL:', FOREX_API);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(FOREX_API, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      console.log('Response received:');
+      console.log('- Status:', response.status);
+      console.log('- Status Text:', response.statusText);
+      console.log('- Headers:', Object.fromEntries(response.headers.entries()));
+      console.log('- URL:', response.url);
+      
+      const text = await response.text();
+      console.log('- Raw Response:', text);
+      
+      if (!response.ok) {
+        console.error('HTTP Error:', response.status, response.statusText);
+        return;
+      }
+      
+      try {
+        const json = JSON.parse(text);
+        console.log('- Parsed JSON:', json);
+        console.log('- Data type:', Array.isArray(json) ? 'Array' : typeof json);
+        console.log('- Data length:', Array.isArray(json) ? json.length : 'N/A');
+      } catch (parseErr) {
+        console.error('JSON Parse Error:', parseErr);
+        console.log('Response is not valid JSON');
+      }
+      
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        console.error('Request timed out after 10 seconds');
+      } else {
+        console.error('Test API error:', err.name, err.message);
+      }
+    }
+    console.log('=== End API Test ===');
+  };
+
+  // Manual retry function
+  const retryFetch = () => {
+    if (backendBaseUrl) {
+      setError(null);
+      // Trigger a re-fetch by updating the dependency
+      const loadData = async () => {
+        setLoading(true);
+        // Re-run the fetch logic
+        window.location.reload(); // Simple approach, or you could extract the fetch logic
+      };
+      loadData();
+    }
+  };
+  
   function addSymbol(sym, name) {
-    if (!symbols.includes(sym)) setSymbols([...symbols, sym]);
-    if (name) setNames((n) => ({ ...n, [sym]: name }));
+    if (!symbols.includes(sym)) {
+      setSymbols([...symbols, sym]);
+      if (name) {
+        setNames(prev => ({ ...prev, [sym]: name }));
+      }
+      if (!prices[sym]) {
+        setPrices(prev => ({ ...prev, [sym]: Math.random() * 2 + 0.5 }));
+      }
+    }
     setSelectedSymbol(sym);
     setInput("");
     setSuggestions([]);
     setSearchActive(false);
   }
+  
   function removeSymbol(sym) {
-    setSymbols(symbols.filter((s) => s !== sym));
-    if (sym === selectedSymbol) setSelectedSymbol(symbols[0] || "");
+    setSymbols(symbols.filter(s => s !== sym));
+    if (sym === selectedSymbol) {
+      const remaining = symbols.filter(s => s !== sym);
+      setSelectedSymbol(remaining[0] || "");
+    }
   }
+  
   function handleDragStart(i) {
     dragIdx.current = i;
   }
+  
   function handleDrop(i) {
     if (dragIdx.current === null || dragIdx.current === i) return;
     const updated = [...symbols];
@@ -123,14 +327,104 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol, darkMode })
     dragIdx.current = null;
   }
 
-  // ========== 5. UI ==========
+  // URL input handler
+  const handleUrlSubmit = (url) => {
+    if (url) {
+      const cleanUrl = url.trim().replace(/\/$/, ''); // Remove trailing slash
+      setBackendBaseUrl(cleanUrl);
+      localStorage.setItem('backendBaseUrl', cleanUrl);
+      console.log('Backend URL updated to:', cleanUrl);
+    }
+  };
+
+  // Render a prompt to enter the ngrok URL if it's not set
+  if (!backendBaseUrl) {
+    return (
+      <aside className={`w-56 min-w-40 ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-[#121826] border-gray-200'} border-r p-4 flex flex-col justify-center`}>
+        <div className="mb-4">
+          <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
+            Enter your ngrok URL:
+          </label>
+          <input
+            type="text"
+            className={`mt-1 block w-full px-2 py-1 text-sm border rounded ${darkMode ? 'bg-gray-800 text-white border-gray-700' : 'bg-white text-gray-900 border-gray-300'}`}
+            placeholder="https://your-app-name.onrender.com"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleUrlSubmit(e.target.value);
+              }
+            }}
+          />
+          <p className={`mt-1 text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+            Enter your Render backend URL (e.g., https://your-app.onrender.com)
+          </p>
+        </div>
+      </aside>
+    );
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <aside className={`w-56 min-w-40 ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-[#121826] border-gray-200'} border-r p-4 flex items-center justify-center`}>
+        <div className={`${darkMode ? 'text-gray-400' : 'text-gray-500'} text-sm text-center`}>
+          <div>Loading...</div>
+          <div className="text-xs mt-1">{FOREX_API}</div>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className={`w-56 min-w-40 ${darkMode ? 'bg-gray-900 border-gray-700' : 'bg-[#121826] border-gray-200'} border-r p-4 flex flex-col`}>
+      {/* Error message */}
+      {error && (
+        <div className="mb-2 p-2 bg-red-100 border border-red-400 text-red-700 text-xs rounded">
+          <div className="font-semibold">API Error:</div>
+          <div className="mt-1">{error}</div>
+          <div className="mt-2 flex gap-1">
+            <button 
+              onClick={testAPI}
+              className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+              type="button"
+            >
+              Test API
+            </button>
+            <button 
+              onClick={retryFetch}
+              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+              type="button"
+            >
+              Retry
+            </button>
+          </div>
+          <div className="mt-1 text-xs text-gray-600">
+            URL: {FOREX_API}
+          </div>
+        </div>
+      )}
+      
+      {/* URL configuration */}
+      <div className="mb-2">
+        <div className={`text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'} mb-1`}>
+          Backend: {backendBaseUrl}
+        </div>
+        <button
+          onClick={() => {
+            localStorage.removeItem('backendBaseUrl');
+            setBackendBaseUrl('');
+          }}
+          className="text-xs text-blue-500 hover:text-blue-700"
+        >
+          Change URL
+        </button>
+      </div>
+      
       {/* Search box */}
       <div className="flex mb-2 relative">
         <input
           className={`flex-1 rounded px-2 py-1 border text-sm ${darkMode ? 'bg-gray-800 text-white border-gray-700 placeholder-gray-400' : 'bg-white text-gray-900 border-gray-300 placeholder-gray-500'}`}
-          placeholder="Search or add symbol..."
+          placeholder="Search forex pairs..."
           value={input}
           onFocus={() => setSearchActive(true)}
           onBlur={() => setTimeout(() => setSearchActive(false), 150)}
@@ -138,7 +432,7 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol, darkMode })
             setInput(e.target.value.toUpperCase());
             setSearchActive(true);
           }}
-          aria-label="Search global stocks"
+          aria-label="Search forex pairs"
         />
         <button
           onClick={() =>
@@ -151,7 +445,8 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol, darkMode })
         >
           +
         </button>
-        {/* Suggestions */}
+        
+        {/* Suggestions dropdown */}
         {searchActive && suggestions.length > 0 && (
           <div className={`absolute z-20 left-0 top-8 w-full ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded shadow-xl`}>
             {suggestions.map((s) => (
@@ -162,15 +457,20 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol, darkMode })
                 onMouseDown={() => addSymbol(s.symbol, s.name)}
               >
                 <b>{s.symbol}</b>{" "}
-                <span className={darkMode ? "text-gray-400" : "text-gray-600"}>{s.name}</span>{" "}
+                {s.name && (
+                  <>
+                    <span className={darkMode ? "text-gray-400" : "text-gray-600"}>{s.name}</span>{" "}
+                  </>
+                )}
                 <span className={darkMode ? "text-gray-500" : "text-gray-400"}>({s.type})</span>
               </div>
             ))}
           </div>
         )}
       </div>
-      {/* Watchlist (always starts with top gainers) */}
-      <ul className="flex-1 overflow-auto space-y-1" aria-label="Watchlist">
+      
+      {/* Watchlist */}
+      <ul className="flex-1 overflow-auto space-y-1" aria-label="Forex Watchlist">
         {symbols.map((sym, i) => {
           const price = prices[sym];
           const isActive = sym === selectedSymbol;
@@ -194,10 +494,17 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol, darkMode })
                 if (e.key === "Enter" || e.key === " ") setSelectedSymbol(sym);
               }}
             >
-              <span className={`flex-1 truncate ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>{sym}</span>
-              <span className={`ml-2 text-xs ${darkMode ? 'text-gray-500' : 'text-gray-400'} truncate`}>
-                {names[sym] || ""}
-              </span>
+              <div className="flex-1 min-w-0">
+                <span className={`block truncate font-medium ${darkMode ? 'text-gray-200' : 'text-gray-900'}`}>
+                  {sym}
+                </span>
+                {names[sym] && (
+                  <span className={`block text-xs truncate ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
+                    {names[sym]}
+                  </span>
+                )}
+              </div>
+              
               <span
                 className={`ml-2 text-sm tabular-nums ${
                   price == null 
@@ -205,8 +512,9 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol, darkMode })
                     : (darkMode ? "text-green-500" : "text-green-600")
                 }`}
               >
-                {price == null ? "..." : `$${price.toFixed(4)}`}
+                {price == null ? "..." : price.toFixed(5)}
               </span>
+              
               <button
                 className={`ml-2 ${darkMode ? 'text-gray-500 hover:text-red-400' : 'text-gray-400 hover:text-red-500'} text-xs`}
                 onClick={(e) => {
@@ -218,6 +526,7 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol, darkMode })
               >
                 ×
               </button>
+              
               <span
                 className={`ml-1 cursor-move ${darkMode ? 'text-gray-600' : 'text-gray-300'} select-none`}
                 aria-hidden="true"
@@ -229,6 +538,12 @@ export default function Sidebar({ selectedSymbol, setSelectedSymbol, darkMode })
           );
         })}
       </ul>
+      
+      {symbols.length === 0 && !loading && (
+        <div className={`text-center ${darkMode ? 'text-gray-500' : 'text-gray-400'} text-sm mt-4`}>
+          {error ? 'Failed to load forex pairs' : 'No forex pairs in watchlist'}
+        </div>
+      )}
     </aside>
   );
 }

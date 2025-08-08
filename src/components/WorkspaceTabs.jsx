@@ -11,7 +11,6 @@ export default function WorkspaceTabs({
 }) {
   // Handle import button click and pass setWorkspaces/setActiveTabIdx to importWorkspace helper
  
-
   const activeWorkspaceExists = workspaces && workspaces.length > 0 && workspaces[activeIdx];
 
   return (
@@ -22,19 +21,19 @@ export default function WorkspaceTabs({
           className={`flex items-center px-4 py-2 cursor-pointer border-r last:border-r-0 select-none
             ${
               i === activeIdx
-                ? "bg-blue-50 dark:bg-blue-900 font-bold text-blue-700"
+                ? "bg-blue-50 dark:bg-blue-900 text-blue-700 border-b-2 border-blue-500"
                 : "text-gray-700 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
             }
             `}
           onClick={() => setActiveTabIdx(i)}
           role="tab"
           aria-selected={i === activeIdx}
-          tabIndex={i === activeIdx ? 0 : -1}
+          tabIndex={0}
           aria-label={`Workspace tab ${ws.label || ws.symbol || "Chart"}`}
         >
           <input
-            className={`bg-transparent font-semibold outline-none ring-0 rounded px-1 mr-2 max-w-[80px] ${
-              i === activeIdx ? "" : "pointer-events-none"
+            className={`bg-transparent outline-none ring-0 rounded px-1 mr-2 max-w-[80px] ${
+              i === activeIdx ? "font-bold" : "pointer-events-none"
             }`}
             value={ws.label || ws.symbol || "Chart"}
             onChange={(e) => renameTab(i, e.target.value)}

@@ -14,6 +14,7 @@ import BottomPanel from "./components/BottomPanel";
 import AlertPanel from "./components/AlertPanel";
 import { NotificationProvider } from "./context/NotificationContext";
 import NotificationPanel from "./components/NotificationPanel";
+import LoginPage from "./pages/LoginPage";
 
 function defaultWorkspace(symbol = "AAPL") {
   return {
@@ -29,6 +30,15 @@ function defaultWorkspace(symbol = "AAPL") {
 }
 
 function App() {
+  // Auth user from context
+  const { user, loading } = useAuth();
+  
+  // Demo user state for when Firebase auth is not available
+  const [demoUser, setDemoUser] = useState(null);
+  
+  // Use either Firebase user or demo user
+  const currentUser = user || demoUser;
+
   // Workspaces and active tab state
   const [workspaces, setWorkspaces] = useState(() => {
     const saved = localStorage.getItem("workspaces");
@@ -70,13 +80,11 @@ function App() {
     localStorage.setItem("workspaces", JSON.stringify(workspaces));
   }, [workspaces]);
 
-  // Auth user from context
-  const { user } = useAuth();
-
   // Alerts state: listen to Firestore for current user's alerts for current workspace symbol
   const [alerts, setAlerts] = useState([]);
 
   useEffect(() => {
+    // Only connect to Firebase if we have a real Firebase user (not demo)
     if (!user || !ws?.symbol) {
       setAlerts([]);
       return;
@@ -92,7 +100,7 @@ function App() {
       setAlerts(filteredAlerts);
     });
     return () => unsubscribe();
-  }, [user, ws?.symbol]);
+  }, [user, ws?.symbol]); // Note: only depends on 'user', not 'currentUser'
 
   // Workspace manipulation functions
   function addTab() {
@@ -181,6 +189,30 @@ function App() {
     input.click();
   }
 
+  // Handle demo login
+  const handleDemoLogin = (mockUser) => {
+    setDemoUser(mockUser);
+    console.log('Demo user logged in:', mockUser);
+  };
+
+  // Show loading spinner while checking authentication
+  // if (loading && !demoUser) {
+  //   return (
+  //     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 flex items-center justify-center">
+  //       <div className="text-white">
+  //         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+  //         <p className="text-lg">Loading...</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
+
+  // // Show login page if user is not authenticated
+  // if (!currentUser) {
+  //   return <LoginPage onDemoLogin={handleDemoLogin} />;
+  // }
+
+  // Show main trading app if user is authenticated
   return (
     <NotificationProvider>
       <NotificationPanel />
@@ -188,7 +220,7 @@ function App() {
         <TopNav location="India">
           <ThemeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
         </TopNav>
-    
+
         {/* Workspace Tabs with export/import handlers */}
         <WorkspaceTabs
           workspaces={workspaces}
@@ -214,7 +246,7 @@ function App() {
 
           {/* Main content */}
           <main className="flex-1 p-6 overflow-auto flex flex-col">
-            <ChartControls
+            <ChartControls  
               selectedTf={ws.timeframe}
               setSelectedTf={(tf) => updateWorkspaceField("timeframe", tf)}
               activeIndicators={ws.activeIndicators}

@@ -9,7 +9,6 @@ import { calculateMACD } from "../utils/macd";
 import { calculateBollinger } from "../utils/bollingerBands";
 import DrawingOverlay from "./DrawingOverlay";
 
-// Map interval label to Twelve Data API interval.
 const INTERVALS = {
   "1s": "1s",
   "1m": "1min",
@@ -33,12 +32,13 @@ const INTERVALS = {
   "2y": "2year",
   "5y": "5year",
 };
-// TwelveData API key from .env
-const API_KEY = "demo"; // Using demo key directly since we don't have a real API key
+
+const API_KEY = "demo";
 
 function Chart({ symbol, timeframe, activeIndicators = [] }) {
-  // Get dark mode from document class
-  const isDarkMode = document.documentElement.classList.contains('dark');
+  const [isDarkMode, setIsDarkMode] = useState(
+    document.documentElement.classList.contains('dark')
+  );
   const chartDivRef = useRef(null);
   const containerRef = useRef(null);
   const [chart, setChart] = useState(null);
@@ -46,274 +46,425 @@ function Chart({ symbol, timeframe, activeIndicators = [] }) {
   const [candleData, setCandleData] = useState([]);
   const indicatorSeriesRef = useRef({});
   const { activeTool, draft, setDraft, addDrawing, clearDraft } = useDrawing();
+  
+  // Drawing state
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [textInput, setTextInput] = useState({ show: false, x: 0, y: 0, value: '' });
 
-  // Function to generate mock candle data
-  const generateMockCandleData = (symbol, count) => {
-    console.log("Generating mock data for", symbol);
-    const basePrice = symbol === "AAPL" ? 190 : 
-                     symbol === "MSFT" ? 420 : 
-                     symbol === "GOOGL" ? 175 : 
-                     symbol === "AMZN" ? 180 : 100;
+  // Monitor dark mode changes
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    });
     
-    const now = new Date();
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+    
+    return () => observer.disconnect();
+  }, []);
+
+  // Generate proper mock candlestick data
+  const generateMockCandleData = (symbol, count = 100) => {
+    const basePrice = {
+      "AAPL": 190,
+      "MSFT": 420, 
+      "GOOGL": 175,
+      "AMZN": 180,
+      "TSLA": 250,
+      "EUR/USD": 1.0800,
+      "GBP/USD": 1.2500,
+      "USD/JPY": 150.00,
+      "BTC/USD": 45000,
+      "ETH/USD": 3000
+    }[symbol] || 100;
+    
     const data = [];
+    let price = basePrice;
+    const now = Math.floor(Date.now() / 1000);
+    const timeInterval = timeframe === "1m" ? 60 : 
+                        timeframe === "5m" ? 300 : 
+                        timeframe === "15m" ? 900 : 
+                        timeframe === "1h" ? 3600 : 86400;
     
-    for (let i = count; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      
-      const volatility = 0.03; // 3% price movement
-      const changePercent = (Math.random() - 0.5) * volatility;
-      const open = basePrice * (1 + (Math.random() - 0.5) * 0.01 * i);
-      const close = open * (1 + changePercent);
-      const high = Math.max(open, close) * (1 + Math.random() * 0.01);
-      const low = Math.min(open, close) * (1 - Math.random() * 0.01);
+    for (let i = 0; i < count; i++) {
+      const time = now - (count - i) * timeInterval;
+      const open = price;
+      const volatility = 0.02;
+      const trend = Math.sin(i / 10) * 0.001;
+      const randomMove = (Math.random() - 0.5) * volatility + trend;
+      const close = open + (open * randomMove);
+      const range = Math.abs(close - open);
+      const extraRange = range * (0.5 + Math.random() * 1.5);
+      const high = Math.max(open, close) + (Math.random() * extraRange);
+      const low = Math.min(open, close) - (Math.random() * extraRange);
+      const finalHigh = Math.max(high, open, close);
+      const finalLow = Math.min(low, open, close);
       
       data.push({
-        time: Math.floor(date.getTime() / 1000),
-        open,
-        high,
-        low,
-        close
+        time: time,
+        open: Number(open.toFixed(4)),
+        high: Number(finalHigh.toFixed(4)),
+        low: Number(finalLow.toFixed(4)),
+        close: Number(close.toFixed(4))
       });
+      
+      price = close;
     }
     
     return data;
   };
   
-  // ========= 1. Fetch candle data from Twelve Data API =========
+  // Fetch or generate candle data
   useEffect(() => {
-    if (!symbol || !INTERVALS[timeframe]) {
-      console.log("Missing symbol or timeframe:", { symbol, timeframe });
+    if (!symbol || !timeframe) {
       return;
     }
-    console.log("Fetching data for symbol:", symbol, "timeframe:", timeframe);
-    setCandleData([]);
-    // For forex and crypto, TwelveData expects EUR/USD as EURUSD
-    const apiSym = symbol.replace("/", "");
     
-    // Generate mock data if using demo key
     if (API_KEY === "demo") {
-      console.log("Using mock data for demo key");
-      const mockData = generateMockCandleData(symbol, 100);
+      const mockData = generateMockCandleData(symbol, 150);
       setCandleData(mockData);
-      if (candleSeries) candleSeries.setData(mockData);
-      return;
-    }
-    
-    axios
-      .get(`https://api.twelvedata.com/time_series`, {
+    } else {
+      const apiSym = symbol.replace("/", "");
+      axios.get(`https://api.twelvedata.com/time_series`, {
         params: {
           symbol: apiSym,
           interval: INTERVALS[timeframe],
-          outputsize: 5000,
+          outputsize: 300,
           apikey: API_KEY,
         },
       })
       .then((res) => {
-        if (!res.data.values)
+        if (!res.data.values) {
           throw new Error(res.data.message || "API returned no values");
+        }
+        
         const fetchedData = res.data.values.reverse().map((entry) => ({
           time: Math.floor(new Date(entry.datetime).getTime() / 1000),
-          open: +entry.open,
-          high: +entry.high,
-          low: +entry.low,
-          close: +entry.close,
+          open: Number(entry.open),
+          high: Number(entry.high),
+          low: Number(entry.low),
+          close: Number(entry.close),
         }));
+        
         setCandleData(fetchedData);
-        if (candleSeries) candleSeries.setData(fetchedData);
       })
-      .catch((err) => console.error("Error fetching chart data:", err));
-  }, [symbol, timeframe, candleSeries]);
+      .catch((err) => {
+        console.error("API Error:", err);
+        setCandleData(generateMockCandleData(symbol, 150));
+      });
+    }
+  }, [symbol, timeframe]);
 
-  // ========= 2. Chart and candle series initialization =========
+  // Initialize chart
   useEffect(() => {
     if (!chartDivRef.current) return;
-    console.log("Initializing chart with symbol:", symbol, "Dark mode:", isDarkMode);
-    const chartInstance = createChart(chartDivRef.current, {
-      width: chartDivRef.current.clientWidth,
-      height: 500,
-      layout: { 
-        background: isDarkMode ? "#1e1e2d" : "#f5f6fa", 
-        textColor: isDarkMode ? "#d1d4dc" : "#333" 
-      },
-      grid: { 
-        vertLines: { color: isDarkMode ? "#2e2e3e" : "#eee" }, 
-        horzLines: { color: isDarkMode ? "#2e2e3e" : "#eee" } 
-      },
-      timeScale: {
-        borderColor: isDarkMode ? "#2e2e3e" : "#eee",
-        timeVisible: true,
-      },
-    });
-    const candle = chartInstance.addCandlestickSeries({
-      upColor: "#26a69a",
-      downColor: "#ef5350",
-      borderVisible: false,
-      wickUpColor: "#26a69a",
-      wickDownColor: "#ef5350",
-    });
-    setChart(chartInstance);
-    setCandleSeries(candle);
-
-    // Responsive: update width on resize
-    function handleResize() {
-      chartInstance.applyOptions({ width: chartDivRef.current.clientWidth });
+    
+    if (chart) {
+      chart.remove();
     }
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      chartInstance.remove();
-    };
-  }, []);
-  
-  // ========= 2.1 Handle dark mode changes =========
-  useEffect(() => {
-    if (!chart) return;
     
-    // Update chart theme when dark mode changes
-    chart.applyOptions({
-      layout: { 
-        background: isDarkMode ? "#1e1e2d" : "#f5f6fa", 
-        textColor: isDarkMode ? "#d1d4dc" : "#333" 
+    const newChart = createChart(chartDivRef.current, {
+      width: chartDivRef.current.offsetWidth,
+      height: chartDivRef.current.offsetHeight,
+      layout: {
+        background: { color: isDarkMode ? '#1e1e2d' : '#ffffff' },
+        textColor: isDarkMode ? '#d1d4dc' : '#333333',
       },
-      grid: { 
-        vertLines: { color: isDarkMode ? "#2e2e3e" : "#eee" }, 
-        horzLines: { color: isDarkMode ? "#2e2e3e" : "#eee" } 
+      grid: {
+        vertLines: { color: isDarkMode ? '#2a2e39' : '#e6e8ea' },
+        horzLines: { color: isDarkMode ? '#2a2e39' : '#e6e8ea' },
       },
       timeScale: {
-        borderColor: isDarkMode ? "#2e2e3e" : "#eee",
+        borderColor: isDarkMode ? '#2a2e39' : '#e6e8ea',
+        timeVisible: true,
+        secondsVisible: false,
+      },
+      rightPriceScale: {
+        borderColor: isDarkMode ? '#2a2e39' : '#e6e8ea',
+        scaleMargins: {
+          top: 0.1,
+          bottom: 0.1,
+        },
+      },
+      crosshair: {
+        mode: 1,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
       },
     });
     
-    console.log("Updated chart theme for dark mode:", isDarkMode);
-  }, [chart, isDarkMode]);
+    const candleSeriesConfig = {
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderUpColor: '#26a69a',
+      borderDownColor: '#ef5350',
+      wickUpColor: '#26a69a',
+      wickDownColor: '#ef5350',
+      borderVisible: true,
+      wickVisible: true,
+    };
+    
+    const newCandleSeries = newChart.addCandlestickSeries(candleSeriesConfig);
+    
+    setChart(newChart);
+    setCandleSeries(newCandleSeries);
 
-  // ========= 3. Add overlays (SMA, EMA, RSI, etc...) =========
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (entries.length === 0 || entries[0].target !== chartDivRef.current) {
+        return;
+      }
+      
+      const { width, height } = entries[0].contentRect;
+      newChart.applyOptions({ width, height });
+    });
+    
+    resizeObserver.observe(chartDivRef.current);
+
+    return () => {
+      resizeObserver.disconnect();
+      newChart.remove();
+    };
+  }, [isDarkMode]);
+  
+  // Set candlestick data when available
+  useEffect(() => {
+    if (!candleSeries || !candleData.length) {
+      return;
+    }
+    
+    try {
+      const validData = candleData.filter(candle => 
+        candle.time && 
+        typeof candle.open === 'number' && 
+        typeof candle.high === 'number' && 
+        typeof candle.low === 'number' && 
+        typeof candle.close === 'number' &&
+        candle.high >= candle.low &&
+        candle.high >= Math.max(candle.open, candle.close) &&
+        candle.low <= Math.min(candle.open, candle.close)
+      );
+      
+      if (validData.length > 0) {
+        candleSeries.setData(validData);
+        
+        setTimeout(() => {
+          if (chart) {
+            chart.timeScale().fitContent();
+          }
+        }, 100);
+      }
+    } catch (error) {
+      console.error("Error setting candlestick data:", error);
+    }
+  }, [candleSeries, candleData, chart]);
+
+  // Add technical indicators
   useEffect(() => {
     if (!chart || !candleSeries || !candleData.length) return;
-    // Clean up overlays
+    
     Object.values(indicatorSeriesRef.current).forEach((series) => {
       try {
         chart.removeSeries(series);
-      } catch {}
+      } catch (e) {
+        console.warn("Error removing indicator series:", e);
+      }
     });
     indicatorSeriesRef.current = {};
-    // Add overlays
-    const addOverlay = (key, data, options) => {
-      const series = chart.addLineSeries(options);
-      series.setData(data);
-      indicatorSeriesRef.current[key] = series;
-    };
-    if (activeIndicators.some((i) => i.key === "sma"))
-      addOverlay("sma", calculateSMA(candleData, 3), {
-        color: "#1976d2",
-        lineWidth: 2,
-      });
-    if (activeIndicators.some((i) => i.key === "ema"))
-      addOverlay("ema", calculateEMA(candleData, 9), {
-        color: "#ff9800",
-        lineWidth: 2,
-        lineStyle: 1,
-      });
-    if (activeIndicators.some((i) => i.key === "rsi"))
-      addOverlay("rsi", calculateRSI(candleData, 14), {
-        color: "#f50057",
-        lineWidth: 1,
-        lineStyle: 2,
-      });
-    if (activeIndicators.some((i) => i.key === "macd")) {
-      const { macd, signal } = calculateMACD(candleData);
-      addOverlay("macd", macd, { color: "#009688", lineWidth: 1 });
-      addOverlay("macdSignal", signal, { color: "#9c27b0", lineWidth: 1 });
-    }
-    if (activeIndicators.some((i) => i.key === "bbands" || i.key === "bb")) {
-      const { upper, lower, middle } = calculateBollinger(candleData, 20, 2);
-      addOverlay("bbUpper", upper, {
-        color: "#43a047",
-        lineWidth: 1,
-        lineStyle: 1,
-      });
-      addOverlay("bbLower", lower, {
-        color: "#43a047",
-        lineWidth: 1,
-        lineStyle: 1,
-      });
-      addOverlay("bbMiddle", middle, {
-        color: "#607d8b",
-        lineWidth: 1,
-        lineStyle: 2,
-      });
-    }
-    return () => {
-      Object.values(indicatorSeriesRef.current).forEach((series) => {
-        try {
-          chart.removeSeries(series);
-        } catch {}
-      });
-      indicatorSeriesRef.current = {};
-    };
+    
+    activeIndicators.forEach(indicator => {
+      try {
+        switch (indicator.key) {
+          case "sma": {
+            const smaData = calculateSMA(candleData, 20);
+            if (smaData && smaData.length > 0) {
+              const series = chart.addLineSeries({
+                color: '#1976d2',
+                lineWidth: 2,
+                title: 'SMA(20)',
+              });
+              series.setData(smaData);
+              indicatorSeriesRef.current.sma = series;
+            }
+            break;
+          }
+          case "ema": {
+            const emaData = calculateEMA(candleData, 9);
+            if (emaData && emaData.length > 0) {
+              const series = chart.addLineSeries({
+                color: '#ff9800',
+                lineWidth: 2,
+                lineStyle: 1,
+                title: 'EMA(9)',
+              });
+              series.setData(emaData);
+              indicatorSeriesRef.current.ema = series;
+            }
+            break;
+          }
+        }
+      } catch (error) {
+        console.error(`Error adding ${indicator.key} indicator:`, error);
+      }
+    });
   }, [chart, candleSeries, candleData, activeIndicators]);
 
-  // ========= 4. Drawing event handlers (unchanged) =========
-  function getRelativePos(event) {
+  // Get mouse coordinates relative to chart
+  const getMouseCoords = (event) => {
     const rect = containerRef.current.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
-  }
-  function handleMouseDown(event) {
-    const { x, y } = getRelativePos(event);
-    switch (activeTool) {
-      case "trendline":
-        setDraft({ type: "trendline", x1: x, y1: y, x2: x, y2: y });
-        break;
-      case "rectangle":
-        setDraft({ type: "rectangle", x1: x, y1: y, x2: x, y2: y });
-        break;
-      case "arrow":
-        setDraft({ type: "arrow", x1: x, y1: y, x2: x, y2: y });
-        break;
-      case "fib":
-        setDraft({ type: "fib", x1: x, y1: y, x2: x, y2: y });
-        break;
-      case "hline":
-        addDrawing({ type: "hline", y });
-        setDraft(null);
-        break;
-      case "text":
-        const text = prompt("Enter text label:");
-        if (text) addDrawing({ type: "text", x, y, text });
-        setDraft(null);
-        break;
-      default:
-        break;
-    }
-  }
-  function handleMouseMove(event) {
-    if (!draft) return;
-    const { x, y } = getRelativePos(event);
-    if (draft.type === activeTool) setDraft({ ...draft, x2: x, y2: y });
-  }
-  function handleMouseUp(event) {
-    if (!draft) return;
-    const { x, y } = getRelativePos(event);
-    if (draft.type === activeTool) {
-      addDrawing({ ...draft, x2: x, y2: y });
-      clearDraft();
-    }
-  }
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+  };
 
-  // ========= 5. Render chart/overlay container =========
+  // Handle mouse down for drawing
+  const handleMouseDown = (event) => {
+    if (!activeTool || activeTool === 'select') return;
+    
+    const { x, y } = getMouseCoords(event);
+    
+    // Handle text tool separately
+    if (activeTool === 'text') {
+      setTextInput({
+        show: true,
+        x: x,
+        y: y,
+        value: ''
+      });
+      return;
+    }
+
+    // Handle horizontal line tool
+    if (activeTool === 'hline') {
+      const drawing = {
+        type: 'hline',
+        y: y
+      };
+      addDrawing(drawing);
+      return;
+    }
+
+    // For tools that need dragging
+    setIsDrawing(true);
+    
+    const initialDraft = {
+      type: activeTool,
+      x1: x,
+      y1: y,
+      x2: x,
+      y2: y
+    };
+    
+    setDraft(initialDraft);
+  };
+
+  // Handle mouse move for drawing  
+  const handleMouseMove = (event) => {
+    if (!isDrawing || !draft) return;
+    
+    const { x, y } = getMouseCoords(event);
+    
+    setDraft(prev => ({
+      ...prev,
+      x2: x,
+      y2: y
+    }));
+  };
+
+  // Handle mouse up for drawing
+  const handleMouseUp = () => {
+    if (!isDrawing || !draft) return;
+    
+    // Only add drawing if there's meaningful movement
+    const hasMovement = Math.abs(draft.x2 - draft.x1) > 3 || Math.abs(draft.y2 - draft.y1) > 3;
+    
+    if (hasMovement) {
+      addDrawing(draft);
+    }
+    
+    setIsDrawing(false);
+    clearDraft();
+  };
+
+  // Handle text input
+  const handleTextSubmit = () => {
+    if (textInput.value.trim()) {
+      const drawing = {
+        type: 'text',
+        x: textInput.x,
+        y: textInput.y,
+        text: textInput.value.trim()
+      };
+      addDrawing(drawing);
+    }
+    
+    setTextInput({ show: false, x: 0, y: 0, value: '' });
+  };
+
+  // Handle text input key press
+  const handleTextKeyPress = (event) => {
+    if (event.key === 'Enter') {
+      handleTextSubmit();
+    } else if (event.key === 'Escape') {
+      setTextInput({ show: false, x: 0, y: 0, value: '' });
+    }
+  };
+
+  // Get cursor style based on active tool
+  const getCursorStyle = () => {
+    if (activeTool === 'select') return 'default';
+    if (activeTool === 'text') return 'text';
+    return 'crosshair';
+  };
+
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[500px]"
+      className="relative w-full h-full"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      style={{ userSelect: "none" }}
+      style={{ 
+        userSelect: "none", 
+        minHeight: "400px",
+        cursor: getCursorStyle()
+      }}
     >
-      <div ref={chartDivRef} className="w-full h-full" />
+      <div 
+        ref={chartDivRef} 
+        className="w-full h-full"
+        style={{ minHeight: "400px" }}
+      />
+      
       <DrawingOverlay />
+      
+      {/* Text input overlay */}
+      {textInput.show && (
+        <input
+          type="text"
+          value={textInput.value}
+          onChange={(e) => setTextInput(prev => ({ ...prev, value: e.target.value }))}
+          onKeyDown={handleTextKeyPress}
+          onBlur={handleTextSubmit}
+          className="absolute bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm z-50"
+          style={{
+            left: textInput.x,
+            top: textInput.y - 25,
+            minWidth: '100px'
+          }}
+          placeholder="Enter text..."
+          autoFocus
+        />
+      )}
     </div>
   );
 }
